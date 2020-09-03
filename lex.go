@@ -123,6 +123,13 @@ func (l *lexer) acceptRun(valid string) {
 	l.backup()
 }
 
+// drain drains the output so the lexing goroutine will exit.
+// Called by the parser, not in the lexing goroutine.
+func (l *lexer) drain() {
+	for range l.items {
+	}
+}
+
 // error returns an error token and terminates the scan
 // by passing back a nil pointer that will be the next
 // state, terminating l.run.
@@ -162,17 +169,16 @@ func lexStream(l *lexer) stateFn {
 
 func lexString(l *lexer) stateFn {
 	// swallow leading "
-	l.next()
+	l.pos += 1
 	for {
 		if strings.HasPrefix(l.input[l.pos:], "\"") {
-			l.next() // swallow ending "
+			l.pos += 1 // swallow ending "
 			l.emit(itemString)
 			return lexStream // Next state.
 		}
 		// look for escaped \""
 		if strings.HasPrefix(l.input[l.pos:], "\\\"") {
-			l.next()
-			l.next()
+			l.pos += 2
 			continue
 		}
 		if l.next() == eof {
@@ -193,8 +199,7 @@ func lexComment(l *lexer) stateFn {
 
 func lexLineComment(l *lexer) stateFn {
 	// swallow //
-	l.next()
-	l.next()
+	l.pos += 2
 	for {
 		if strings.HasPrefix(l.input[l.pos:], "\n") {
 			// don't include trailng \n
@@ -215,13 +220,11 @@ func lexLineComment(l *lexer) stateFn {
 
 func lexRangeComment(l *lexer) stateFn {
 	// swallow /*
-	l.next()
-	l.next()
+	l.pos += 2
 	for {
 		if strings.HasPrefix(l.input[l.pos:], "*/") {
 			// swallow */
-			l.next()
-			l.next()
+			l.pos += 2
 			l.emit(itemComment)
 			return lexStream
 		}
