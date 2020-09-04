@@ -1,3 +1,7 @@
+// jsonc provides an analogous API to the standard json package, but
+// allows json data to contain comments // ...  or /* ... */. These
+// functions strip comments and allow JSON parsing to proceed as
+// expected using the standard json package.
 package jsonc
 
 import (
@@ -8,11 +12,9 @@ import (
 	"io/ioutil"
 )
 
-// These shortcut functions strip comments and allow JSON parsing to proceed as expected afterwards.
-
 // See json.Unmarsal.
 func Unmarshal(data []byte, v interface{}) error {
-	buf, err := stripComments(data)
+	buf, err := StripComments(data)
 	if err != nil {
 		return err
 	}
@@ -30,7 +32,7 @@ func (jr *jsoncReader) Read(b []byte) (n int, err error) {
 		if err != nil {
 			return 0, err
 		}
-		stripped, err := stripComments(in)
+		stripped, err := StripComments(in)
 		if err != nil {
 			return 0, err
 		}
@@ -47,7 +49,8 @@ func NewDecoder(r io.Reader) *json.Decoder {
 	return json.NewDecoder(jr)
 }
 
-func stripComments(data []byte) ([]byte, error) {
+// Return a copy of the input with all comments stripped.
+func StripComments(data []byte) ([]byte, error) {
 	l := lex("jsonc-strip", string(data))
 	buf := make([]byte, 0, len(data))
 	for {
@@ -59,7 +62,6 @@ func stripComments(data []byte) ([]byte, error) {
 		} else if i.typ != itemComment && i.typ != itemEOF {
 			buf = append(buf, i.val...)
 		}
-
 	}
 	return buf, nil
 }

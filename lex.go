@@ -33,28 +33,29 @@ func (i item) String() string {
 	return fmt.Sprintf("%q", i.val)
 }
 
+// Simple non-concurrent fifo
 type fifo struct {
 	items []item
 }
 
-func (f *fifo) popLeft() item {
+func (f *fifo) Get() item {
 	i := f.items[0]
 	copy(f.items, f.items[1:])
 	f.items = f.items[:len(f.items)-1]
 	return i
 }
 
-func (f *fifo) append(i item) {
+func (f *fifo) Put(i item) {
 	f.items = append(f.items, i)
 }
 
-func (f *fifo) len() int {
+func (f *fifo) Len() int {
 	return len(f.items)
 }
 
 const (
-	itemError itemType = iota // error occurred;
-	// value is text of error
+	itemError itemType = iota // error occurred; value is text of error
+
 	itemEOF
 	itemString
 	itemRaw
@@ -86,13 +87,13 @@ func lex(name, input string) *lexer {
 // Run for a bit until an item has been produced.
 // Returns itemEOF when there is no more input to be consumed.
 func (l *lexer) yield() item {
-	if l.items.len() > 0 {
-		return l.items.popLeft()
+	if l.items.Len() > 0 {
+		return l.items.Get()
 	}
 	for l.state != nil {
 		l.state = l.state(l)
-		if l.items.len() > 0 {
-			return l.items.popLeft()
+		if l.items.Len() > 0 {
+			return l.items.Get()
 		}
 	}
 	return item{typ: itemEOF}
@@ -101,7 +102,7 @@ func (l *lexer) yield() item {
 // emit passes an item back to the client.
 func (l *lexer) emit(t itemType) {
 	i := item{t, l.input[l.start:l.pos]}
-	l.items.append(i)
+	l.items.Put(i)
 	l.start = l.pos
 }
 
@@ -168,7 +169,7 @@ func (l *lexer) errorf(format string, args ...interface{}) stateFn {
 		itemError,
 		fmt.Sprintf(format, args...),
 	}
-	l.items.append(i)
+	l.items.Put(i)
 	return nil
 }
 
@@ -185,13 +186,13 @@ func lexStream(l *lexer) stateFn {
 			if l.pos > l.start {
 				l.emit(itemRaw)
 			}
-			return lexString // Next state.
+			return lexString
 		}
 		if hasPrefixByte(l.input[l.pos:], '/') {
 			if l.pos > l.start {
 				l.emit(itemRaw)
 			}
-			return lexComment // Next state.
+			return lexComment
 		}
 		if l.next() == eof {
 			break
@@ -220,7 +221,7 @@ func lexString(l *lexer) stateFn {
 			continue
 		}
 		if l.next() == eof {
-			return l.errorf("eof during string parse")
+			return l.errorf("unexected EOF scanning string")
 		}
 	}
 }
@@ -242,7 +243,7 @@ func lexLineComment(l *lexer) stateFn {
 		if hasPrefixByte(l.input[l.pos:], '\n') {
 			// don't include trailng \n
 			l.emit(itemComment)
-			return lexStream // Next state.
+			return lexStream
 		}
 		if l.next() == eof {
 			break
@@ -252,8 +253,8 @@ func lexLineComment(l *lexer) stateFn {
 	if l.pos > l.start {
 		l.emit(itemComment)
 	}
-	l.emit(itemEOF) // Useful to make EOF a token.
-	return nil      // Stop the run loop.
+	l.emit(itemEOF)
+	return nil // Stop the run loop.
 }
 
 func lexRangeComment(l *lexer) stateFn {
