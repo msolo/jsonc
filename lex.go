@@ -33,6 +33,25 @@ func (i item) String() string {
 	return fmt.Sprintf("%q", i.val)
 }
 
+type fifo struct {
+	items []item
+}
+
+func (f *fifo) popLeft() item {
+	i := f.items[0]
+	copy(f.items, f.items[1:])
+	f.items = f.items[:len(f.items)-1]
+	return i
+}
+
+func (f *fifo) append(i item) {
+	f.items = append(f.items, i)
+}
+
+func (f *fifo) len() int {
+	return len(f.items)
+}
+
 const (
 	itemError itemType = iota // error occurred;
 	// value is text of error
@@ -45,36 +64,44 @@ const (
 type stateFn func(l *lexer) stateFn
 
 type lexer struct {
-	name  string    // used only for error reports.
-	input string    // the string being scanned.
-	start int       // start position of this item.
-	pos   int       // current position in the input.
-	width int       // width of last rune read from input.
-	items chan item // channel of scanned items.
+	name  string // used only for error reports.
+	input string // the string being scanned.
+	start int    // start position of this item.
+	pos   int    // current position in the input.
+	width int    // width of last rune read from input.
+	state stateFn
+	items *fifo
 }
 
-func lex(name, input string) (*lexer, chan item) {
+func lex(name, input string) *lexer {
 	l := &lexer{
 		name:  name,
 		input: input,
-		items: make(chan item),
+		state: lexStream,
+		items: &fifo{make([]item, 0, 16)},
 	}
-	go l.run() // Concurrently run state machine.
-	return l, l.items
+	return l
 }
 
-// run lexes the input by executing state functions until
-// the state is nil.
-func (l *lexer) run() {
-	for state := lexStream; state != nil; {
-		state = state(l)
+// Run for a bit until an item has been produced.
+// Returns itemEOF when there is no more input to be consumed.
+func (l *lexer) yield() item {
+	if l.items.len() > 0 {
+		return l.items.popLeft()
 	}
-	close(l.items) // No more tokens will be delivered.
+	for l.state != nil {
+		l.state = l.state(l)
+		if l.items.len() > 0 {
+			return l.items.popLeft()
+		}
+	}
+	return item{typ: itemEOF}
 }
 
 // emit passes an item back to the client.
 func (l *lexer) emit(t itemType) {
-	l.items <- item{t, l.input[l.start:l.pos]}
+	i := item{t, l.input[l.start:l.pos]}
+	l.items.append(i)
 	l.start = l.pos
 }
 
@@ -86,10 +113,20 @@ func (l *lexer) next() (r rune) {
 		l.width = 0
 		return eof
 	}
-	r, l.width =
-		utf8.DecodeRuneInString(l.input[l.pos:])
+	r, l.width = utf8.DecodeRuneInString(l.input[l.pos:])
 	l.pos += l.width
 	return r
+}
+
+// nextByte returns the next byte in the input.
+func (l *lexer) nextByte() (b byte, ok bool) {
+	if l.pos >= len(l.input) {
+		l.width = 0
+		return '\000', false
+	}
+	b, l.width = l.input[l.pos], 1
+	l.pos += l.width
+	return b, ok
 }
 
 // backup steps back one rune.
@@ -123,33 +160,34 @@ func (l *lexer) acceptRun(valid string) {
 	l.backup()
 }
 
-// drain drains the output so the lexing goroutine will exit.
-// Called by the parser, not in the lexing goroutine.
-func (l *lexer) drain() {
-	for range l.items {
-	}
-}
-
 // error returns an error token and terminates the scan
 // by passing back a nil pointer that will be the next
 // state, terminating l.run.
 func (l *lexer) errorf(format string, args ...interface{}) stateFn {
-	l.items <- item{
+	i := item{
 		itemError,
 		fmt.Sprintf(format, args...),
 	}
+	l.items.append(i)
 	return nil
+}
+
+func hasPrefixByte(s string, b byte) bool {
+	if len(s) == 0 {
+		return false
+	}
+	return s[0] == b
 }
 
 func lexStream(l *lexer) stateFn {
 	for {
-		if strings.HasPrefix(l.input[l.pos:], "\"") {
+		if hasPrefixByte(l.input[l.pos:], '"') {
 			if l.pos > l.start {
 				l.emit(itemRaw)
 			}
 			return lexString // Next state.
 		}
-		if strings.HasPrefix(l.input[l.pos:], "/") {
+		if hasPrefixByte(l.input[l.pos:], '/') {
 			if l.pos > l.start {
 				l.emit(itemRaw)
 			}
@@ -171,7 +209,7 @@ func lexString(l *lexer) stateFn {
 	// swallow leading "
 	l.pos += 1
 	for {
-		if strings.HasPrefix(l.input[l.pos:], "\"") {
+		if hasPrefixByte(l.input[l.pos:], '"') {
 			l.pos += 1 // swallow ending "
 			l.emit(itemString)
 			return lexStream // Next state.
@@ -201,7 +239,7 @@ func lexLineComment(l *lexer) stateFn {
 	// swallow //
 	l.pos += 2
 	for {
-		if strings.HasPrefix(l.input[l.pos:], "\n") {
+		if hasPrefixByte(l.input[l.pos:], '\n') {
 			// don't include trailng \n
 			l.emit(itemComment)
 			return lexStream // Next state.

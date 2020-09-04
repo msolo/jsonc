@@ -76,7 +76,14 @@ func BenchmarkJSON(b *testing.B) {
 	}
 }
 
-// FIXME(msolo) Benchmark confirms that stripping comments is 9x more expensive than simple JSON parsing. I would accept 2x given the naive approach of scanning twice. 9x seems nutty, so it merits a bit of understanding (naturally trivial profile reveals no hot spot, so we must read tea leaves and take some educated guesses). Of course, it is still absolutely "fast-enough" for almost any application I had planned, but waste not, want not.
+// FIXME(msolo) Benchmark confirms that stripping comments is 2.5x
+// more expensive than simple JSON parsing. I would accept 2x given
+// the naive approach of scanning twice. The original channel approach
+// was 9x more expensive. The current overhead is likely due to UTF8
+// parsing and readable code style rather than just having a simple
+// merged loop over bytes. Of course, it is still absolutely
+// "fast-enough" for almost any application I had planned, but best to
+// know the costs.
 func BenchmarkJSONC(b *testing.B) {
 	in := []byte(benchChunk)
 	out := &struct{}{}

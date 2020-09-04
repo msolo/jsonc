@@ -48,11 +48,13 @@ func NewDecoder(r io.Reader) *json.Decoder {
 }
 
 func stripComments(data []byte) ([]byte, error) {
-	l, items := lex("jsonc-strip", string(data))
-	defer l.drain()
+	l := lex("jsonc-strip", string(data))
 	buf := make([]byte, 0, len(data))
-	for i := range items {
-		if i.typ == itemError {
+	for {
+		i := l.yield()
+		if i.typ == itemEOF {
+			break
+		} else if i.typ == itemError {
 			return nil, fmt.Errorf(i.val)
 		} else if i.typ != itemComment && i.typ != itemEOF {
 			buf = append(buf, i.val...)
