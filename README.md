@@ -5,8 +5,8 @@ JSONC allows parsing of a chunk of JSON that contain helpful comemnts.
 
 
 Sample JSON content:
-```
-`/*
+```java
+/*
 Preamble with fanfare.
 */
 
@@ -22,10 +22,11 @@ Preamble with fanfare.
 ```
 
 Sample usage:
-```
-  v := make(map[string]interface{})
-	dec := NewDecoder(f)
-	if err := dec.Decode(&v); err != nil {
-     return err
-  }
+```go
+v := make(map[string]interface{})
+f, _ := os.Open("sample.jsonc")
+dec := jsonc.NewDecoder(f)
+if err := dec.Decode(&v); err != nil {
+  return err
+}
 ```
