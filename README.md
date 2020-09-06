@@ -38,11 +38,14 @@ if err := dec.Decode(&v); err != nil {
   return err
 }
 ```
+
 ## Command Line Tool
 
-There is unix-esque tool to filter out comments so standard tools like `jq` are still useful.
+`jsonc-strip` is unix-esque tool to filter out comments so standard tools like `jq` are still useful.
 
 ```
+go install github.com/msolo/jsonc/cmd/jsonc-strip
+
 jsonc-strip < sample.jsonc
 
 jsonc-strip < sample.jsonc | jq .x
