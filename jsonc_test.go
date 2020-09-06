@@ -20,6 +20,7 @@ Preamble with fanfare.
   "x": "a string", // Trailing comment.
   "y": 1.0,
   "z": null,
+  // "a": "value temporarily removed for debugging or idle curiosity",
   "array": [],
   "dict": {}  // Wish we could have a trailing comma here.
 }
