@@ -1,7 +1,7 @@
 # JSONC - JSON with Comments
 [![GoDoc](https://godoc.org/github.com/msolo/jsonc?status.svg)](https://godoc.org/github.com/msolo/jsonc)
 
-JSONC allows parsing chunks of JSON that contain helpful comemnts.
+JSONC allows parsing chunks of JSON that contain helpful comments.
 
 The original motivation was to have usable config files without having to resort to things like YAML that are staggeringly complex despite apparent simplicity.
 
@@ -11,7 +11,7 @@ The original motivation was to have usable config files without having to resort
 /*
 You can see that comments are safely valid in any sane place.
 
-You can put a lenghty preamble or embed a poem if necessary.
+You can put a lengthy preamble or embed a poem if necessary.
 */
 
 {
